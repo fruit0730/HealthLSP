@@ -324,7 +324,7 @@ public class Hook implements IXposedHookLoadPackage {
                                     "getPreferenceScreen");
                         }
                         if (screen != null) {
-                            addSearchPreference(cl, screen);
+                            addSearchPreference(cl, param.thisObject, screen);
                         }
                     } catch (Throwable t) {
                         log(t);
@@ -340,7 +340,8 @@ public class Hook implements IXposedHookLoadPackage {
         }
     }
 
-    private static void addSearchPreference(final ClassLoader cl, final Object screen) {
+    private static void addSearchPreference(final ClassLoader cl, final Object fragment,
+            final Object screen) {
         try {
             Object existing = XposedHelpers.callMethod(screen, "findPreference", "healthlsp_search");
             if (existing != null) {
@@ -354,6 +355,10 @@ public class Hook implements IXposedHookLoadPackage {
             XposedHelpers.callMethod(pref, "setTitle", "搜索应用");
             XposedHelpers.callMethod(pref, "setSummary", "输入应用名或包名筛选");
             XposedHelpers.callMethod(pref, "setDialogTitle", "搜索应用");
+            try {
+                XposedHelpers.callMethod(pref, "setOrder", -10000);
+            } catch (Throwable ignored) {
+            }
             Class<?> listenerClass = XposedHelpers.findClass(
                     "androidx.preference.Preference$OnPreferenceChangeListener", cl);
             Object listener = java.lang.reflect.Proxy.newProxyInstance(cl,
@@ -389,8 +394,16 @@ public class Hook implements IXposedHookLoadPackage {
                 XposedHelpers.callMethod(screen, "notifyChanged");
             } catch (Throwable ignored) {
             }
+            try {
+                Object listView = XposedHelpers.callMethod(fragment, "getListView");
+                Object adapter = XposedHelpers.callMethod(listView, "getAdapter");
+                if (adapter != null) {
+                    XposedHelpers.callMethod(adapter, "notifyDataSetChanged");
+                }
+            } catch (Throwable ignored) {
+            }
             applySearchFilter(cl, screen, sLastSearchQuery);
-            log("search preference added");
+            log("search preference added, order=" + XposedHelpers.callMethod(pref, "getOrder"));
         } catch (Throwable t) {
             log("add search preference failed");
             log(t);
