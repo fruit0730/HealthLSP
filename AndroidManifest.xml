@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="cn.classfruit.healthlsp"
+    android:versionCode="3"
+    android:versionName="1.2">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="29" />
+
+    <application
+        android:label="HealthLSP"
+        android:allowBackup="false">
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription"
+            android:value="OPPO 健康：通知同步列表显示全部应用（含系统应用），并放行系统应用的 ignore/forceAbandon" />
+        <meta-data android:name="xposedminversion" android:value="82" />
+    </application>
+</manifest>
