@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.widget.EditText;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -348,42 +349,34 @@ public class Hook implements IXposedHookLoadPackage {
                 applySearchFilter(cl, screen, sLastSearchQuery);
                 return;
             }
-            Object ctx = XposedHelpers.callMethod(screen, "getContext");
-            Class<?> editClass = XposedHelpers.findClass("androidx.preference.EditTextPreference", cl);
-            final Object pref = XposedHelpers.newInstance(editClass, ctx);
+            final Object ctx = XposedHelpers.callMethod(screen, "getContext");
+            Class<?> prefClass = XposedHelpers.findClass("androidx.preference.Preference", cl);
+            final Object pref = XposedHelpers.newInstance(prefClass, ctx);
             XposedHelpers.callMethod(pref, "setKey", "healthlsp_search");
             XposedHelpers.callMethod(pref, "setTitle", "搜索应用");
-            XposedHelpers.callMethod(pref, "setSummary", "输入应用名或包名筛选");
-            XposedHelpers.callMethod(pref, "setDialogTitle", "搜索应用");
+            XposedHelpers.callMethod(pref, "setSummary",
+                    sLastSearchQuery.trim().isEmpty()
+                            ? "输入应用名或包名筛选"
+                            : "筛选：" + sLastSearchQuery);
             try {
                 XposedHelpers.callMethod(pref, "setOrder", -10000);
             } catch (Throwable ignored) {
             }
-            Class<?> listenerClass = XposedHelpers.findClass(
-                    "androidx.preference.Preference$OnPreferenceChangeListener", cl);
-            Object listener = java.lang.reflect.Proxy.newProxyInstance(cl,
-                    new Class<?>[]{listenerClass},
+            Class<?> clickClass = XposedHelpers.findClass(
+                    "androidx.preference.Preference$OnPreferenceClickListener", cl);
+            Object clickListener = java.lang.reflect.Proxy.newProxyInstance(cl,
+                    new Class<?>[]{clickClass},
                     new java.lang.reflect.InvocationHandler() {
                         @Override
                         public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] args) {
-                            if ("onPreferenceChange".equals(method.getName())) {
-                                Object value = args != null && args.length > 1 ? args[1] : null;
-                                String query = value == null ? "" : value.toString();
-                                sLastSearchQuery = query;
-                                applySearchFilter(cl, screen, query);
-                                try {
-                                    XposedHelpers.callMethod(pref, "setSummary",
-                                            query.trim().isEmpty()
-                                                    ? "输入应用名或包名筛选"
-                                                    : "筛选：" + query);
-                                } catch (Throwable ignored) {
-                                }
+                            if ("onPreferenceClick".equals(method.getName())) {
+                                showSearchDialog(cl, ctx, screen, pref);
                                 return Boolean.TRUE;
                             }
                             return null;
                         }
                     });
-            XposedHelpers.callMethod(pref, "setOnPreferenceChangeListener", listener);
+            XposedHelpers.callMethod(pref, "setOnPreferenceClickListener", clickListener);
             XposedHelpers.callMethod(screen, "addPreference", pref);
             try {
                 Object list = XposedHelpers.getObjectField(screen, "mPreferenceList");
@@ -406,6 +399,79 @@ public class Hook implements IXposedHookLoadPackage {
             log("search preference added, order=" + XposedHelpers.callMethod(pref, "getOrder"));
         } catch (Throwable t) {
             log("add search preference failed");
+            log(t);
+        }
+    }
+
+    private static void showSearchDialog(final ClassLoader cl, final Object ctx,
+            final Object screen, final Object pref) {
+        try {
+            Class<?> alertClass;
+            try {
+                alertClass = XposedHelpers.findClass("androidx.appcompat.app.AlertDialog", cl);
+            } catch (Throwable t) {
+                alertClass = XposedHelpers.findClass("android.app.AlertDialog", cl);
+            }
+            Class<?> builderClass = XposedHelpers.findClass(
+                    alertClass.getName() + "$Builder", cl);
+            Object builder = XposedHelpers.newInstance(builderClass, ctx);
+            final EditText input = new EditText((Context) ctx);
+            input.setSingleLine(true);
+            input.setHint("输入应用名或包名");
+            input.setText(sLastSearchQuery);
+            input.setSelection(input.getText().length());
+            input.setTextColor(0xFF000000);
+            input.setHintTextColor(0xFF888888);
+            XposedHelpers.callMethod(builder, "setTitle", "搜索应用");
+            XposedHelpers.callMethod(builder, "setView", input);
+            Class<?> clickCls = XposedHelpers.findClass(
+                    "android.content.DialogInterface$OnClickListener", cl);
+            Object okListener = java.lang.reflect.Proxy.newProxyInstance(cl,
+                    new Class<?>[]{clickCls},
+                    new java.lang.reflect.InvocationHandler() {
+                        @Override
+                        public Object invoke(Object proxy, java.lang.reflect.Method method,
+                                Object[] args) {
+                            if ("onClick".equals(method.getName())) {
+                                String query = input.getText().toString();
+                                sLastSearchQuery = query;
+                                applySearchFilter(cl, screen, query);
+                                try {
+                                    XposedHelpers.callMethod(pref, "setSummary",
+                                            query.trim().isEmpty()
+                                                    ? "输入应用名或包名筛选"
+                                                    : "筛选：" + query);
+                                } catch (Throwable ignored) {
+                                }
+                            }
+                            return null;
+                        }
+                    });
+            Object cancelListener = java.lang.reflect.Proxy.newProxyInstance(cl,
+                    new Class<?>[]{clickCls},
+                    new java.lang.reflect.InvocationHandler() {
+                        @Override
+                        public Object invoke(Object proxy, java.lang.reflect.Method method,
+                                Object[] args) {
+                            return null;
+                        }
+                    });
+            XposedHelpers.callMethod(builder, "setPositiveButton", "确定", okListener);
+            XposedHelpers.callMethod(builder, "setNegativeButton", "取消", cancelListener);
+            Object dialog = XposedHelpers.callMethod(builder, "show");
+            try {
+                Object positive = XposedHelpers.callMethod(dialog, "getButton", -1);
+                XposedHelpers.callMethod(positive, "setTextColor", 0xFF007AFF);
+                Object negative = XposedHelpers.callMethod(dialog, "getButton", -2);
+                XposedHelpers.callMethod(negative, "setTextColor", 0xFF333333);
+                Object window = XposedHelpers.callMethod(dialog, "getWindow");
+                XposedHelpers.callMethod(window, "setSoftInputMode", 5);
+            } catch (Throwable t) {
+                log(t);
+            }
+            log("search dialog shown");
+        } catch (Throwable t) {
+            log("show search dialog failed");
             log(t);
         }
     }
