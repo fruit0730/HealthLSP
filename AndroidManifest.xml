@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cn.classfruit.healthlsp"
-    android:versionCode="3"
-    android:versionName="1.2">
+    android:versionCode="4"
+    android:versionName="1.3">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="29" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="HealthLSP"
         android:allowBackup="false">
+        <activity
+            android:name=".AboutActivity"
+            android:exported="true"
+            android:label="关于 HealthLSP"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription"
             android:value="OPPO 健康：通知同步列表显示全部应用（含系统应用），并放行系统应用的 ignore/forceAbandon" />
